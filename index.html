@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIPTL - Aplikasi Monitoring Tindak Lanjut Rekomendasi Audit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (xlsx) for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        overflow-x: hidden;
+      }
+      .modal-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .active-link {
+        background-color: #1f2937; /* gray-800 */
+        border-left: 4px solid #3b82f6; /* blue-500 */
+        color: white;
+      }
+      #nav-tindak-lanjut-toggle.open .fa-chevron-down {
+        transform: rotate(180deg);
+      }
+      .chart-canvas:hover,
+      #unitChart:hover {
+        cursor: pointer;
+      }
+      .disabled-input {
+        background-color: #f3f4f6;
+        cursor: not-allowed;
+        color: #6b7280;
+      }
+      #sidebar {
+        transition: transform 0.3s ease-in-out;
+      }
+      #sidebar.hidden {
+        transform: translateX(-100%);
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800">
+    <!-- Login View -->
+    <div
+      id="login-view"
+      class="flex items-center justify-center h-screen bg-gray-200"
+    >
+      <div class="w-full max-w-md bg-white rounded-lg shadow-md p-8">
+        <div class="text-center mb-8">
+          <h2 class="text-2xl font-bold text-gray-800 mt-6">SIPTL</h2>
+          <p class="text-gray-500">Silakan login untuk melanjutkan</p>
+        </div>
+        <form id="loginForm">
+          <div class="mb-4">
+            <label
+              for="username"
+              class="block text-sm font-medium text-gray-700 mb-2"
+              >Username</label
+            >
+            <input
+              type="text"
+              id="username"
+              class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div class="mb-6">
+            <label
+              for="password"
+              class="block text-sm font-medium text-gray-700 mb-2"
+              >Password</label
+            >
+            <input
+              type="password"
+              id="password"
+              class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <p
+            id="login-error"
+            class="text-red-500 text-sm text-center mb-4 hidden"
+          >
+            Username atau password salah.
+          </p>
+          <button
+            type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105"
+          >
+            Login
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container" class="hidden h-screen bg-gray-200">
+      <div class="flex h-full relative">
+        <!-- Sidebar -->
+        <aside
+          id="sidebar"
+          class="w-64 bg-gray-900 text-gray-300 flex-shrink-0 flex flex-col absolute md:relative z-20 h-full hidden md:flex"
+        >
+          <div>
+            <div class="p-6 text-center border-b border-gray-700">
+              <h2 class="text-xl font-bold text-white tracking-wider">SIPTL</h2>
+              <p class="text-xs text-gray-400 leading-tight">
+                Sistem Informasi Pemantauan Tindak Lanjut Hasil Rekomendasi
+                Pengawasan
+              </p>
+            </div>
+            <nav class="mt-4">
+              <ul>
+                <li>
+                  <a
+                    href="#"
+                    id="nav-dashboard"
+                    class="nav-link active-link flex items-center py-3 px-6 hover:bg-gray-700 transition-colors"
+                  >
+                    <i class="fas fa-tachometer-alt w-6 text-center"></i>
+                    <span class="ml-3">Dashboard</span>
+                  </a>
+                </li>
+                <li class="relative">
+                  <button
+                    id="nav-tindak-lanjut-toggle"
+                    class="nav-link w-full text-left flex items-center py-3 px-6 hover:bg-gray-700 transition-colors"
+                  >
+                    <i class="fas fa-folder-open w-6 text-center"></i>
+                    <span class="ml-3">Tindak Lanjut</span>
+                  </button>
+                  <ul id="nav-submenu" class="pl-12 bg-gray-800 hidden text-sm">
+                    <!-- Submenu items will be populated by JS -->
+                  </ul>
+                </li>
+                <li id="nav-history-li" style="display: none">
+                  <a
+                    href="#"
+                    id="nav-history"
+                    class="nav-link flex items-center py-3 px-6 hover:bg-gray-700 transition-colors"
+                  >
+                    <i class="fas fa-history w-6 text-center"></i>
+                    <span class="ml-3">History</span>
+                  </a>
+                </li>
+                <li id="nav-user-management-li" style="display: none">
+                  <a
+                    href="#"
+                    id="nav-user-management"
+                    class="nav-link flex items-center py-3 px-6 hover:bg-gray-700 transition-colors"
+                  >
+                    <i class="fas fa-users-cog w-6 text-center"></i>
+                    <span class="ml-3">Manajemen User</span>
+                  </a>
+                </li>
+                <li id="nav-profile-li" style="display: none">
+                  <a
+                    href="#"
+                    id="nav-profile"
+                    class="nav-link flex items-center py-3 px-6 hover:bg-gray-700 transition-colors"
+                  >
+                    <i class="fas fa-user-shield w-6 text-center"></i>
+                    <span class="ml-3">Profil</span>
+                  </a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+          <div
+            id="app"
+            class="container mx-auto p-4 md:p-8 flex-1 overflow-y-auto"
+          >
+            <!-- Header -->
+            <header class="bg-white shadow-md rounded-lg p-6 mb-8">
+              <div
+                class="flex flex-col md:flex-row justify-between items-center gap-4"
+              >
+                <div class="flex items-center">
+                  <button
+                    id="sidebar-toggle"
+                    class="text-gray-500 hover:text-gray-600 mr-4"
+                  >
+                    <i class="fas fa-bars fa-lg"></i>
+                  </button>
+                  <div>
+                    <h1
+                      id="main-title"
+                      class="text-2xl md:text-3xl font-bold text-gray-700"
+                    >
+                      Dashboard Monitoring
+                    </h1>
+                    <p id="main-subtitle" class="text-gray-500 mt-1"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div class="text-right">
+                    <p
+                      id="user-display"
+                      class="font-semibold text-gray-700"
+                    ></p>
+                    <p id="role-display" class="text-sm text-gray-500"></p>
+                  </div>
+                  <button
+                    id="logoutBtn"
+                    class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors"
+                  >
+                    <i class="fas fa-sign-out-alt"></i>
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            <!-- Main Content -->
+            <main>
+              <!-- Dashboard View -->
+              <div id="dashboard-view">
+                <div
+                  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+                >
+                  <div class="bg-white shadow-md rounded-lg p-4">
+                    <h3
+                      class="text-md font-semibold text-gray-700 mb-2 text-center"
+                    >
+                      TLHP BPK
+                    </h3>
+                    <div class="w-full h-48 flex items-center justify-center">
+                      <canvas id="bpkChart" class="chart-canvas"></canvas>
+                    </div>
+                  </div>
+                  <div class="bg-white shadow-md rounded-lg p-4">
+                    <h3
+                      class="text-md font-semibold text-gray-700 mb-2 text-center"
+                    >
+                      TLHP BPK-Kemenkeu
+                    </h3>
+                    <div class="w-full h-48 flex items-center justify-center">
+                      <canvas
+                        id="bpkKemenkeuChart"
+                        class="chart-canvas"
+                      ></canvas>
+                    </div>
+                  </div>
+                  <div class="bg-white shadow-md rounded-lg p-4">
+                    <h3
+                      class="text-md font-semibold text-gray-700 mb-2 text-center"
+                    >
+                      TLHP BPKP
+                    </h3>
+                    <div class="w-full h-48 flex items-center justify-center">
+                      <canvas id="bpkpChart" class="chart-canvas"></canvas>
+                    </div>
+                  </div>
+                  <div class="bg-white shadow-md rounded-lg p-4">
+                    <h3
+                      class="text-md font-semibold text-gray-700 mb-2 text-center"
+                    >
+                      TLHP IBKK
+                    </h3>
+                    <div class="w-full h-48 flex items-center justify-center">
+                      <canvas id="ibkkChart" class="chart-canvas"></canvas>
+                    </div>
+                  </div>
+                  <div class="bg-white shadow-md rounded-lg p-4">
+                    <h3
+                      class="text-md font-semibold text-gray-700 mb-2 text-center"
+                    >
+                      TLHP IBAK
+                    </h3>
+                    <div class="w-full h-48 flex items-center justify-center">
+                      <canvas id="ibakChart" class="chart-canvas"></canvas>
+                    </div>
+                  </div>
+                  <div class="bg-white shadow-md rounded-lg p-4">
+                    <h3
+                      class="text-md font-semibold text-gray-700 mb-2 text-center"
+                    >
+                      TLHP IBI
+                    </h3>
+                    <div class="w-full h-48 flex items-center justify-center">
+                      <canvas id="ibiChart" class="chart-canvas"></canvas>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bar Chart -->
+                <div class="bg-white shadow-md rounded-lg p-6">
+                  <div
+                    class="flex flex-col md:flex-row justify-between items-center mb-4"
+                  >
+                    <h3 class="text-lg font-semibold text-gray-700">
+                      Penyelesaian per Unit PJ
+                    </h3>
+                    <div class="flex items-center gap-2 mt-2 md:mt-0">
+                      <label for="yearFilter" class="text-sm font-medium"
+                        >Tahun LHP:</label
+                      >
+                      <select
+                        id="yearFilter"
+                        class="border rounded-lg px-3 py-1 text-sm"
+                      ></select>
+                    </div>
+                  </div>
+                  <div class="w-full" style="height: 600px">
+                    <canvas id="unitChart"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Table View -->
+              <div id="table-view" class="hidden">
+                <div class="bg-white shadow-md rounded-lg p-6">
+                  <!-- Controls -->
+                  <div
+                    class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4"
+                  >
+                    <div class="relative w-full md:w-1/3">
+                      <input
+                        type="text"
+                        id="searchInput"
+                        class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Cari rekomendasi..."
+                      />
+                      <i
+                        class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      ></i>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <select
+                        id="filterStatus"
+                        class="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">Semua Status</option>
+                        <option value="Selesai">Selesai</option>
+                        <option value="Dalam Proses">Dalam Proses</option>
+                        <option value="Belum Ditindaklanjuti">
+                          Belum Ditindaklanjuti
+                        </option>
+                      </select>
+                      <button
+                        id="addRecommendationBtn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105"
+                      >
+                        <i class="fas fa-plus mr-2"></i>Tambah Data
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Recommendations Table -->
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white">
+                      <thead class="bg-gray-200">
+                        <tr>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            No
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Sumber & No LHP
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Tahun
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Temuan
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Kondisi
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            No. Rekomendasi
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Nama Rekomendasi
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Unit PJ & Nama Unit Kerja
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Dokumen/Link Data Dukung
+                          </th>
+                          <th
+                            class="py-3 px-4 text-center font-semibold text-sm"
+                          >
+                            Status
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Catatan PTL sebelumnya
+                          </th>
+                          <th
+                            class="py-3 px-4 text-center font-semibold text-sm"
+                          >
+                            Aksi
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody
+                        id="recommendationTableBody"
+                        class="divide-y divide-gray-200"
+                      ></tbody>
+                    </table>
+                    <div
+                      id="noResults"
+                      class="text-center py-8 text-gray-500 hidden"
+                    >
+                      <i class="fas fa-box-open fa-3x mb-4"></i>
+                      <p>Data tidak ditemukan.</p>
+                    </div>
+                  </div>
+                  <!-- Pagination -->
+                  <div class="mt-6 flex justify-between items-center">
+                    <span
+                      id="paginationInfo"
+                      class="text-sm text-gray-600"
+                    ></span>
+                    <div class="flex gap-1">
+                      <button
+                        id="prevPage"
+                        class="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <i class="fas fa-chevron-left"></i>
+                      </button>
+                      <button
+                        id="nextPage"
+                        class="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <i class="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- History View -->
+              <div id="history-view" class="hidden">
+                <div class="bg-white shadow-md rounded-lg p-6">
+                  <!-- History Table -->
+                  <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white">
+                      <thead class="bg-gray-200">
+                        <tr>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Timestamp
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            User
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Aksi
+                          </th>
+                          <th class="py-3 px-4 text-left font-semibold text-sm">
+                            Detail Perubahan
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody
+                        id="historyTableBody"
+                        class="divide-y divide-gray-200"
+                      ></tbody>
+                    </table>
+                    <div
+                      id="noHistoryResults"
+                      class="text-center py-8 text-gray-500 hidden"
+                    >
+                      <i class="fas fa-history fa-3x mb-4"></i>
+                      <p>Belum ada riwayat aktivitas.</p>
+                    </div>
+                  </div>
+                  <!-- History Pagination -->
+                  <div class="mt-6 flex justify-between items-center">
+                    <span
+                      id="historyPaginationInfo"
+                      class="text-sm text-gray-600"
+                    ></span>
+                    <div class="flex gap-1">
+                      <button
+                        id="prevHistoryPage"
+                        class="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <i class="fas fa-chevron-left"></i>
+                      </button>
+                      <button
+                        id="nextHistoryPage"
+                        class="px-3 py-1 border rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <i class="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- User Management View -->
+              <div id="user-management-view" class="hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <!-- Add/Edit User Form -->
+                  <div class="lg:col-span-1">
+                    <div class="bg-white shadow-md rounded-lg p-6">
+                      <h3 id="userFormTitle" class="text-lg font-bold mb-4">
+                        Tambah User Baru
+                      </h3>
+                      <form id="userForm" class="space-y-4">
+                        <input type="hidden" id="userId" />
+                        <div>
+                          <label
+                            for="userUnit"
+                            class="block text-sm font-medium"
+                            >Unit Kerja</label
+                          >
+                          <select
+                            id="userUnit"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            required
+                          ></select>
+                        </div>
+                        <div>
+                          <label
+                            for="newUsername"
+                            class="block text-sm font-medium"
+                            >Username</label
+                          >
+                          <input
+                            type="text"
+                            id="newUsername"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label
+                            for="newPassword"
+                            class="block text-sm font-medium"
+                            >Password</label
+                          >
+                          <input
+                            type="password"
+                            id="newPassword"
+                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            required
+                          />
+                          <p class="text-xs text-gray-500 mt-1">
+                            Saat mengedit, isi untuk mengganti password.
+                          </p>
+                        </div>
+                        <div class="flex gap-2 pt-2">
+                          <button
+                            type="submit"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center"
+                          >
+                            <i class="fas fa-save mr-2"></i>Simpan
+                          </button>
+                          <button
+                            type="button"
+                            id="cancelUserEditBtn"
+                            class="w-full bg-gray-300 hover:bg-gray-400 font-bold py-2 px-4 rounded-lg hidden"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                  <!-- User List -->
+                  <div class="lg:col-span-2">
+                    <div class="bg-white shadow-md rounded-lg p-6">
+                      <h3 class="text-lg font-bold mb-4">Daftar User</h3>
+                      <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                          <thead class="bg-gray-200">
+                            <tr>
+                              <th
+                                class="py-2 px-3 text-left text-sm font-semibold"
+                              >
+                                Username
+                              </th>
+                              <th
+                                class="py-2 px-3 text-left text-sm font-semibold"
+                              >
+                                Unit Kerja
+                              </th>
+                              <th
+                                class="py-2 px-3 text-center text-sm font-semibold"
+                              >
+                                Aksi
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody id="userTableBody" class="divide-y"></tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Profile View -->
+              <div id="profile-view" class="hidden">
+                <div class="bg-white shadow-md rounded-lg p-6 max-w-lg mx-auto">
+                  <h3 class="text-lg font-bold mb-4">Ubah Profil Akun</h3>
+                  <div
+                    id="profile-message"
+                    class="hidden p-3 rounded-md mb-4 text-sm"
+                  ></div>
+                  <form id="profileForm" class="space-y-4">
+                    <div>
+                      <label
+                        for="profileUsername"
+                        class="block text-sm font-medium"
+                        >Username</label
+                      >
+                      <input
+                        type="text"
+                        id="profileUsername"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        for="currentPassword"
+                        class="block text-sm font-medium"
+                        >Password Lama</label
+                      >
+                      <input
+                        type="password"
+                        id="currentPassword"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label
+                        for="newProfilePassword"
+                        class="block text-sm font-medium"
+                        >Password Baru</label
+                      >
+                      <input
+                        type="password"
+                        id="newProfilePassword"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                        placeholder="Isi untuk ganti password"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        for="confirmNewPassword"
+                        class="block text-sm font-medium"
+                        >Konfirmasi Password Baru</label
+                      >
+                      <input
+                        type="password"
+                        id="confirmNewPassword"
+                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                      />
+                    </div>
+                    <div class="pt-2">
+                      <button
+                        type="submit"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center"
+                      >
+                        <i class="fas fa-save mr-2"></i>Simpan Perubahan
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Add/Edit Recommendation -->
+    <div id="recommendationModal" class="modal-backdrop">
+      <div
+        class="bg-white rounded-lg shadow-2xl w-11/12 md:w-2/3 lg:w-1/2 modal-content"
+      >
+        <div class="p-6 border-b">
+          <h2 id="modalTitle" class="text-2xl font-bold">Tambah Data Baru</h2>
+        </div>
+        <form id="recommendationForm" class="p-6 space-y-4">
+          <input type="hidden" id="recommendationId" />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Kolom Kiri -->
+            <div class="space-y-4">
+              <div class="form-group">
+                <label
+                  for="sumberAudit"
+                  class="block text-sm font-medium text-gray-700"
+                  >Sumber Audit</label
+                >
+                <select
+                  id="sumberAudit"
+                  class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="BPK">BPK</option>
+                  <option value="BPK-Kemenkeu">BPK-Kemenkeu</option>
+                  <option value="BPKP">BPKP</option>
+                  <option value="IBKK">IBKK</option>
+                  <option value="IBAK">IBAK</option>
+                  <option value="IBI">IBI</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label
+                  for="noLHP"
+                  class="block text-sm font-medium text-gray-700"
+                  >Nomor LHP</label
+                >
+                <input
+                  type="text"
+                  id="noLHP"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label
+                  for="namaLHP"
+                  class="block text-sm font-medium text-gray-700"
+                  >Nama LHP</label
+                >
+                <input
+                  type="text"
+                  id="namaLHP"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label
+                  for="tahun"
+                  class="block text-sm font-medium text-gray-700"
+                  >Tahun LHP</label
+                >
+                <input
+                  type="number"
+                  id="tahun"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Contoh: 2024"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label
+                  for="temuan"
+                  class="block text-sm font-medium text-gray-700"
+                  >Temuan</label
+                >
+                <textarea
+                  id="temuan"
+                  rows="3"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required
+                ></textarea>
+              </div>
+              <div class="form-group">
+                <label
+                  for="kondisi"
+                  class="block text-sm font-medium text-gray-700"
+                  >Kondisi</label
+                >
+                <textarea
+                  id="kondisi"
+                  rows="3"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required
+                ></textarea>
+              </div>
+              <div class="form-group">
+                <label
+                  for="noRekomendasi"
+                  class="block text-sm font-medium text-gray-700"
+                  >Nomor Rekomendasi</label
+                >
+                <input
+                  type="text"
+                  id="noRekomendasi"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label
+                  for="deskripsi"
+                  class="block text-sm font-medium text-gray-700"
+                  >Nama Rekomendasi</label
+                >
+                <textarea
+                  id="deskripsi"
+                  rows="4"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required
+                ></textarea>
+              </div>
+              <div class="form-group">
+                <label
+                  for="unitPJ"
+                  class="block text-sm font-medium text-gray-700"
+                  >Unit Penanggung Jawab</label
+                >
+                <select
+                  id="unitPJ"
+                  class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  required
+                ></select>
+              </div>
+              <div class="form-group">
+                <label
+                  for="namaUnitKerja"
+                  class="block text-sm font-medium text-gray-700"
+                  >Nama Unit Kerja</label
+                >
+                <input
+                  type="text"
+                  id="namaUnitKerja"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <!-- Kolom Kanan -->
+            <div class="space-y-4">
+              <div class="form-group">
+                <label
+                  for="status"
+                  class="block text-sm font-medium text-gray-700"
+                  >Status Tindak Lanjut</label
+                >
+                <select
+                  id="status"
+                  class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="Selesai">Selesai</option>
+                  <option value="Dalam Proses">Dalam Proses</option>
+                  <option value="Belum Ditindaklanjuti">
+                    Belum Ditindaklanjuti
+                  </option>
+                </select>
+              </div>
+              <div class="form-group hidden" id="catatanPemantauContainer">
+                <label
+                  for="catatanPemantau"
+                  class="block text-sm font-medium text-gray-700"
+                  >Catatan PTL sebelumnya</label
+                >
+                <textarea
+                  id="catatanPemantau"
+                  rows="3"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                ></textarea>
+              </div>
+              <div class="form-group">
+                <label
+                  for="keterangan"
+                  class="block text-sm font-medium text-gray-700"
+                  >Keterangan Tindak Lanjut</label
+                >
+                <textarea
+                  id="keterangan"
+                  rows="4"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                ></textarea>
+              </div>
+              <div class="form-group">
+                <label
+                  for="dokumen"
+                  class="block text-sm font-medium text-gray-700"
+                  >Unggah Dokumen Pendukung (Multi-file)</label
+                >
+                <input
+                  type="file"
+                  id="dokumen"
+                  multiple
+                  class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <div
+                  id="dokumen-sebelumnya"
+                  class="text-xs text-gray-500 mt-1 space-y-1"
+                ></div>
+              </div>
+              <div class="form-group">
+                <label
+                  for="linkDokumen"
+                  class="block text-sm font-medium text-gray-700"
+                  >Lampirkan Tautan/Link</label
+                >
+                <textarea
+                  id="linkDokumen"
+                  rows="3"
+                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Pisahkan beberapa link dengan baris baru"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-end gap-4 pt-4 border-t mt-4">
+            <button
+              type="button"
+              id="cancelBtn"
+              class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center"
+            >
+              <i class="fas fa-save mr-2"></i>Simpan
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal for Recap and Export -->
+    <div id="recapModal" class="modal-backdrop">
+      <div
+        class="bg-white rounded-lg shadow-2xl w-11/12 md:w-3/4 lg:w-2/3 modal-content"
+      >
+        <div class="p-6 border-b flex justify-between items-center">
+          <h2 id="recapModalTitle" class="text-xl font-bold">Rekapan Data</h2>
+          <button
+            id="closeRecapModalBtn"
+            class="text-gray-500 hover:text-gray-800 text-3xl"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="p-6">
+          <div
+            id="recapTableContainer"
+            class="overflow-auto"
+            style="max-height: 50vh"
+          >
+            <!-- Recap table will be generated here by JS -->
+          </div>
+        </div>
+        <div
+          class="flex justify-end gap-4 p-4 border-t bg-gray-50 rounded-b-lg"
+        >
+          <button
+            id="exportExcelBtn"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
+          >
+            <i class="fas fa-file-excel mr-2"></i>Ekspor ke Excel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // --- MOCK DATA ---
+        const allUnits = [
+          "Sekretariat Kementerian/Sekretariat Utama",
+          "Deputi Bidang Perencanaan Makro Pembangunan",
+          "Deputi Bidang Pembangunan Kewilayahan",
+          "Deputi Bidang Ekonomi dan Transformasi Digital",
+          "Deputi Bidang Politik, Hukum, Hak Asasi Manusia, Pertahanan, dan Keamanan",
+          "Deputi Bidang Pemberdayaan Masyarakat, Kependudukan, dan Ketenagakerjaan",
+          "Deputi Bidang Pembangunan Manusia dan Kebudayaan",
+          "Deputi Bidang Pangan, Sumber Daya Alam, dan Lingkungan Hidup",
+          "Deputi Bidang Infrastruktur",
+          "Deputi Bidang Pembiayaan dan Investasi Pembangunan",
+          "Deputi Bidang Pengendalian, Evaluasi, dan Manajemen Risiko Pembangunan",
+          "Inspektorat Utama",
+          "Staf Ahli Bidang Pemerataan Pembangunan Regional",
+          "Staf Ahli Bidang Sosial dan Penanggulangan Kemiskinan",
+          "Staf Ahli Bidang Pembangunan Sektor Unggulan dan Inovasi Digital",
+          "Staf Ahli Bidang Hubungan Kelembagaan",
+          "Staf Ahli Bidang Inovasi Pendanaan Pembangunan",
+        ];
+
+        let recommendations = [
+          {
+            id: 1,
+            sumber: "BPK",
+            noLHP: "01/LHP/BPK/2023",
+            namaLHP: "LHP Kinerja Atas Pengelolaan Aset",
+            tahun: 2023,
+            temuan: "Aset tetap belum diinventarisasi secara berkala.",
+            kondisi: "Terdapat perbedaan data aset antara buku dan fisik.",
+            no: "01.A",
+            deskripsi: "Optimalisasi pengelolaan aset tetap.",
+            unit: allUnits[11],
+            namaUnitKerja: "Bagian Rumah Tangga",
+            status: "Selesai",
+            keterangan: "Telah dilakukan stock opname dan revaluasi aset.",
+            dokumen: [{ type: "file", value: "BA-Opname-2023.pdf" }],
+            catatanPemantau: "",
+          },
+          {
+            id: 2,
+            sumber: "BPKP",
+            noLHP: "02/LHP/BPKP/2023",
+            namaLHP: "Evaluasi Sistem Pengendalian Internal Pemerintah (SPIP)",
+            tahun: 2023,
+            temuan: "Penerapan SPIP belum optimal di seluruh unit kerja.",
+            kondisi: "Beberapa unit belum memiliki peta risiko yang memadai.",
+            no: "02.B",
+            deskripsi: "Peningkatan efektivitas sistem pengendalian internal.",
+            unit: allUnits[2],
+            namaUnitKerja: "Direktorat Pembangunan Daerah",
+            status: "Dalam Proses",
+            keterangan: "Sedang menyusun draft Peraturan Menteri terkait SPIP.",
+            dokumen: [
+              {
+                type: "link",
+                value: "http://docs.example.com/draft-permen-spip",
+              },
+            ],
+            catatanPemantau: "Menunggu draft final dari tim perumus.",
+          },
+          {
+            id: 3,
+            sumber: "IBKK",
+            noLHP: "05/LHP/IT/2024",
+            namaLHP: "Audit Kepatuhan Perjalanan Dinas",
+            tahun: 2024,
+            temuan: "Prosedur perjalanan dinas belum terstandarisasi.",
+            kondisi: "Terjadi inkonsistensi dalam pertanggungjawaban biaya.",
+            no: "03.C",
+            deskripsi: "Penyusunan SOP perjalanan dinas.",
+            unit: allUnits[13],
+            namaUnitKerja: "Tenaga Ahli Madya",
+            status: "Belum Ditindaklanjuti",
+            keterangan: "",
+            dokumen: [],
+            catatanPemantau: "",
+          },
+          {
+            id: 4,
+            sumber: "BPK",
+            noLHP: "15/LHP/BPK/2022",
+            namaLHP: "LHP Kepatuhan Atas Belanja Negara",
+            tahun: 2022,
+            temuan: "Mekanisme pencatatan piutang negara belum akurat.",
+            kondisi: "Terdapat saldo piutang yang tidak dapat ditelusuri.",
+            no: "04.A",
+            deskripsi: "Penyempurnaan mekanisme pencatatan piutang.",
+            unit: allUnits[3],
+            namaUnitKerja: "Direktorat Ekonomi Digital",
+            status: "Selesai",
+            keterangan: "Telah melakukan rekonsiliasi piutang dengan KPPN.",
+            dokumen: [{ type: "file", value: "BA-Rekon-Piutang-2022.pdf" }],
+            catatanPemantau: "",
+          },
+          {
+            id: 5,
+            sumber: "IBAK",
+            noLHP: "08/LHP/BPKP/2024",
+            namaLHP: "Reviu Laporan Keuangan",
+            tahun: 2024,
+            temuan:
+              "Fungsi pengawasan Aparat Pengawas Internal Pemerintah (APIP) perlu diperkuat.",
+            kondisi: "Keterbatasan jumlah auditor internal.",
+            no: "05.B",
+            deskripsi: "Penguatan pengawasan internal.",
+            unit: allUnits[5],
+            namaUnitKerja: "Direktorat Ketenagakerjaan",
+            status: "Dalam Proses",
+            keterangan: "Akan dilaksanakan audit internal pada Triwulan 4.",
+            dokumen: [],
+            catatanPemantau:
+              "Jadwal audit internal akan dikonfirmasi minggu depan.",
+          },
+          {
+            id: 6,
+            sumber: "BPK-Kemenkeu",
+            noLHP: "11/LHP/BPK-K/2023",
+            namaLHP: "Pemeriksaan Implementasi SAKTI",
+            tahun: 2023,
+            temuan:
+              "Beberapa modul pada aplikasi SAKTI belum dimanfaatkan secara penuh.",
+            kondisi: "Kurangnya pemahaman user terhadap fitur-fitur baru.",
+            no: "06.D",
+            deskripsi: "Evaluasi atas implementasi SAKTI.",
+            unit: allUnits[3],
+            namaUnitKerja: "Biro Keuangan",
+            status: "Dalam Proses",
+            keterangan: "Menunggu update modul dari Kemenkeu.",
+            dokumen: [],
+            catatanPemantau: "Masih dalam koordinasi dengan Kemenkeu.",
+          },
+          {
+            id: 7,
+            sumber: "IBI",
+            noLHP: "09/LHP/IT/2024",
+            namaLHP: "Audit Kepatuhan Pelaporan Harta Kekayaan",
+            tahun: 2024,
+            temuan: "Tingkat kepatuhan LHKPN masih perlu ditingkatkan.",
+            kondisi: "Beberapa pejabat belum melaporkan LHKPN tepat waktu.",
+            no: "07.C",
+            deskripsi: "Meningkatkan kepatuhan pelaporan LHKPN.",
+            unit: allUnits[13],
+            namaUnitKerja: "Inspektorat Bidang Kinerja Kelembagaan",
+            status: "Selesai",
+            keterangan: "Seluruh wajib lapor telah submit LHKPN tepat waktu.",
+            dokumen: [
+              { type: "file", value: "Rekap-LHKPN-2024.xlsx" },
+              { type: "file", value: "Surat-Pengantar.pdf" },
+            ],
+            catatanPemantau: "",
+          },
+          {
+            id: 8,
+            sumber: "BPKP",
+            noLHP: "03/LHP/BPKP/2022",
+            namaLHP: "Reviu Atas Pengelolaan Aset BLU",
+            tahun: 2022,
+            temuan: "Tarif layanan Badan Layanan Umum (BLU) belum dievaluasi.",
+            kondisi: "Tarif saat ini tidak lagi sesuai dengan biaya layanan.",
+            no: "08.B",
+            deskripsi: "Review kembali tarif layanan BLU.",
+            unit: allUnits[9],
+            namaUnitKerja: "Pusat Fasilitasi Infrastruktur",
+            status: "Belum Ditindaklanjuti",
+            keterangan: "",
+            dokumen: [],
+            catatanPemantau: "",
+          },
+          {
+            id: 9,
+            sumber: "BPK-Kemenkeu",
+            noLHP: "01/LHP/BPK-K/2024",
+            namaLHP: "Pemeriksaan Sistem Informasi Aset Negara",
+            tahun: 2024,
+            temuan: "Data aset pada SIMAN belum sinkron dengan data DJKN.",
+            kondisi: "Perbedaan pencatatan nilai perolehan aset.",
+            no: "09.D",
+            deskripsi: "Sinkronisasi data aset dengan DJKN.",
+            unit: allUnits[0],
+            namaUnitKerja: "Biro Umum",
+            status: "Selesai",
+            keterangan: "Sudah sinkron per 1 Juli 2024.",
+            dokumen: [{ type: "file", value: "BA-Sinkronisasi-DJKN.pdf" }],
+            catatanPemantau: "",
+          },
+          {
+            id: 10,
+            sumber: "BPK",
+            noLHP: "02/LHP/BPK/2023",
+            namaLHP: "LHP Atas Kerugian Negara",
+            tahun: 2023,
+            temuan: "Proses penyelesaian ganti rugi negara berjalan lambat.",
+            kondisi:
+              "Belum ada Surat Keterangan Tanggung Jawab Mutlak (SKTJM).",
+            no: "10.A",
+            deskripsi: "Percepatan penyelesaian ganti rugi negara.",
+            unit: allUnits[3],
+            namaUnitKerja: "Biro Hukum",
+            status: "Dalam Proses",
+            keterangan: "SKTJM sedang diproses.",
+            dokumen: [],
+            catatanPemantau: "SKTJM menunggu tanda tangan Kepala Biro.",
+          },
+        ];
+        let historyLog = [];
+
+        // --- USER DATA ---
+        let users = [
+          {
+            id: 1,
+            username: "ibkk",
+            password: "123",
+            role: "pemantau",
+            unit: "Inspektorat Bidang Kinerja Kelembagaan",
+          },
+          {
+            id: 2,
+            username: "setmen",
+            password: "123",
+            role: "unit_kerja",
+            unit: "Sekretariat Kementerian/Sekretariat Utama",
+          },
+          {
+            id: 3,
+            username: "deputi1",
+            password: "123",
+            role: "unit_kerja",
+            unit: "Deputi Bidang Perencanaan Makro Pembangunan",
+          },
+          {
+            id: 4,
+            username: "ibak",
+            password: "123",
+            role: "pemantau",
+            unit: "Inspektorat Bidang Akuntabilitas Keuangan",
+          },
+          {
+            id: 5,
+            username: "ibi",
+            password: "123",
+            role: "pemantau",
+            unit: "Inspektorat Bidang Investigasi",
+          },
+        ];
+        let currentUser = null;
+
+        // --- DOM ELEMENTS ---
+        const loginView = document.getElementById("login-view");
+        const appContainer = document.getElementById("app-container");
+        const loginForm = document.getElementById("loginForm");
+        const loginError = document.getElementById("login-error");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const userDisplay = document.getElementById("user-display");
+        const roleDisplay = document.getElementById("role-display");
+        const sidebar = document.getElementById("sidebar");
+        const sidebarToggle = document.getElementById("sidebar-toggle");
+        const mainTitle = document.getElementById("main-title");
+        const mainSubtitle = document.getElementById("main-subtitle");
+        const dashboardView = document.getElementById("dashboard-view");
+        const tableView = document.getElementById("table-view");
+        const historyView = document.getElementById("history-view");
+        const tableBody = document.getElementById("recommendationTableBody");
+        const addBtn = document.getElementById("addRecommendationBtn");
+        const modal = document.getElementById("recommendationModal");
+        const cancelBtn = document.getElementById("cancelBtn");
+        const form = document.getElementById("recommendationForm");
+        const modalTitle = document.getElementById("modalTitle");
+        const searchInput = document.getElementById("searchInput");
+        const filterStatus = document.getElementById("filterStatus");
+        const noResults = document.getElementById("noResults");
+        const paginationInfo = document.getElementById("paginationInfo");
+        const prevPage = document.getElementById("prevPage");
+        const nextPage = document.getElementById("nextPage");
+        const navDashboard = document.getElementById("nav-dashboard");
+        const navTindakLanjutToggle = document.getElementById(
+          "nav-tindak-lanjut-toggle"
+        );
+        const navSubmenu = document.getElementById("nav-submenu");
+        const navHistory = document.getElementById("nav-history");
+        const navHistoryLi = document.getElementById("nav-history-li");
+        // Recap Modal Elements
+        const recapModal = document.getElementById("recapModal");
+        const recapModalTitle = document.getElementById("recapModalTitle");
+        const closeRecapModalBtn =
+          document.getElementById("closeRecapModalBtn");
+        const recapTableContainer = document.getElementById(
+          "recapTableContainer"
+        );
+        const exportExcelBtn = document.getElementById("exportExcelBtn");
+        // History Elements
+        const historyTableBody = document.getElementById("historyTableBody");
+        const noHistoryResults = document.getElementById("noHistoryResults");
+        const historyPaginationInfo = document.getElementById(
+          "historyPaginationInfo"
+        );
+        const prevHistoryPage = document.getElementById("prevHistoryPage");
+        const nextHistoryPage = document.getElementById("nextHistoryPage");
+        // Year Filter
+        const yearFilter = document.getElementById("yearFilter");
+        // User Management Elements
+        const navUserManagementLi = document.getElementById(
+          "nav-user-management-li"
+        );
+        const navUserManagement = document.getElementById(
+          "nav-user-management"
+        );
+        const userManagementView = document.getElementById(
+          "user-management-view"
+        );
+        const userForm = document.getElementById("userForm");
+        const userFormTitle = document.getElementById("userFormTitle");
+        const userTableBody = document.getElementById("userTableBody");
+        const cancelUserEditBtn = document.getElementById("cancelUserEditBtn");
+        const unitPJDropdown = document.getElementById("unitPJ");
+        // Profile Elements
+        const navProfileLi = document.getElementById("nav-profile-li");
+        const navProfile = document.getElementById("nav-profile");
+        const profileView = document.getElementById("profile-view");
+        const profileForm = document.getElementById("profileForm");
+        const profileMessage = document.getElementById("profile-message");
+
+        // State
+        let currentPage = 1;
+        let currentHistoryPage = 1;
+        const rowsPerPage = 5;
+        let filteredData = [...recommendations];
+        let unitFilter = "all";
+        let unitChartInstance = null;
+        let doughnutChartInstances = {};
+        let dataForExport = [];
+
+        const statusColors = {
+          Selesai: "rgba(75, 192, 192, 0.8)",
+          "Dalam Proses": "rgba(255, 206, 86, 0.8)",
+          "Belum Ditindaklanjuti": "rgba(255, 99, 132, 0.8)",
+        };
+        const doughnutChartConfig = [
+          { id: "bpkChart", source: "BPK" },
+          { id: "bpkKemenkeuChart", source: "BPK-Kemenkeu" },
+          { id: "bpkpChart", source: "BPKP" },
+          { id: "ibkkChart", source: "IBKK" },
+          { id: "ibakChart", source: "IBAK" },
+          { id: "ibiChart", source: "IBI" },
+        ];
+
+        // --- LOGIN/LOGOUT LOGIC ---
+        loginForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const username = document.getElementById("username").value;
+          const password = document.getElementById("password").value;
+          const foundUser = users.find(
+            (u) => u.username === username && u.password === password
+          );
+          if (foundUser) {
+            currentUser = foundUser;
+            loginError.classList.add("hidden");
+            loginView.style.display = "none";
+            appContainer.classList.remove("hidden");
+            initializeApp();
+          } else {
+            loginError.classList.remove("hidden");
+          }
+        });
+
+        logoutBtn.addEventListener("click", () => {
+          currentUser = null;
+          appContainer.classList.add("hidden");
+          loginView.style.display = "flex";
+          loginForm.reset();
+        });
+
+        // --- INITIALIZE APP AFTER LOGIN ---
+        const initializeApp = () => {
+          userDisplay.textContent = currentUser.username;
+          roleDisplay.textContent = currentUser.unit || "Unit Kerja";
+
+          // Build Sidebar Submenu
+          navSubmenu.innerHTML = ""; // Clear previous
+          let submenuHTML = "";
+          if (currentUser.role === "pemantau") {
+            submenuHTML += `<li><a href="#" class="nav-link-sub py-2 px-4 block hover:bg-gray-700 truncate" data-source="all">Semua Unit</a></li>`;
+          }
+          allUnits.forEach((unit) => {
+            const truncatedUnit =
+              unit.length > 40 ? unit.substring(0, 40) + "..." : unit;
+            submenuHTML += `<li><a href="#" class="nav-link-sub py-2 px-4 block hover:bg-gray-700 truncate" data-source="${unit}" title="${unit}">${truncatedUnit}</a></li>`;
+          });
+          navSubmenu.innerHTML = submenuHTML;
+          document
+            .querySelectorAll(".nav-link-sub")
+            .forEach((link) =>
+              link.addEventListener("click", handleSubmenuClick)
+            );
+
+          // Set UI Access based on role
+          navHistoryLi.style.display = "block";
+          if (currentUser.role === "pemantau") {
+            unitFilter = "all";
+            navUserManagementLi.style.display = "block";
+            navProfileLi.style.display = "block";
+            addBtn.style.display = "inline-flex";
+          } else {
+            unitFilter = currentUser.unit;
+            navUserManagementLi.style.display = "none";
+            navProfileLi.style.display = "none";
+            addBtn.style.display = "none";
+            const allUnitsLink =
+              navSubmenu.querySelector(`[data-source="all"]`);
+            if (allUnitsLink) allUnitsLink.parentElement.style.display = "none";
+
+            const userUnitLink = navSubmenu.querySelector(
+              `[data-source="${currentUser.unit}"]`
+            );
+            if (userUnitLink) {
+              setTimeout(() => userUnitLink.click(), 0);
+            } else {
+              toggleView("dashboard");
+            }
+          }
+
+          populateYearFilter();
+          renderDashboard();
+          if (currentUser.role !== "unit_kerja") {
+            toggleView("dashboard");
+          }
+          updateActiveLink(document.getElementById("nav-dashboard"));
+        };
+
+        // --- USER MANAGEMENT (for Pemantau) ---
+        const renderUserTable = () => {
+          userTableBody.innerHTML = "";
+          const unitUsers = users.filter((u) => u.role === "unit_kerja");
+          unitUsers.forEach((user) => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td class="py-2 px-3">${user.username}</td>
+                <td class="py-2 px-3">${user.unit}</td>
+                <td class="py-2 px-3 text-center">
+                    <button class="text-blue-600 hover:text-blue-800 mr-2 edit-user-btn" data-id="${user.id}"><i class="fas fa-pencil-alt"></i></button>
+                    <button class="text-red-600 hover:text-red-800 delete-user-btn" data-id="${user.id}"><i class="fas fa-trash-alt"></i></button>
+                </td>
+            `;
+            userTableBody.appendChild(row);
+          });
+        };
+
+        userForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const id = document.getElementById("userId").value;
+          const unit = document.getElementById("userUnit").value;
+          const username = document.getElementById("newUsername").value;
+          const password = document.getElementById("newPassword").value;
+
+          if (id) {
+            // Editing
+            const user = users.find((u) => u.id == id);
+            user.unit = unit;
+            user.username = username;
+            if (password) {
+              user.password = password;
+            }
+          } else {
+            // Adding
+            if (users.some((u) => u.username === username)) {
+              alert("Username sudah ada. Silakan gunakan username lain.");
+              return;
+            }
+            const newId =
+              users.length > 0 ? Math.max(...users.map((u) => u.id)) + 1 : 1;
+            users.push({
+              id: newId,
+              username,
+              password,
+              role: "unit_kerja",
+              unit,
+            });
+          }
+          resetUserForm();
+          renderUserTable();
+        });
+
+        const resetUserForm = () => {
+          userForm.reset();
+          document.getElementById("userId").value = "";
+          userFormTitle.textContent = "Tambah User Baru";
+          cancelUserEditBtn.classList.add("hidden");
+        };
+
+        cancelUserEditBtn.addEventListener("click", resetUserForm);
+
+        userTableBody.addEventListener("click", (e) => {
+          const editBtn = e.target.closest(".edit-user-btn");
+          if (editBtn) {
+            const user = users.find((u) => u.id == editBtn.dataset.id);
+            document.getElementById("userId").value = user.id;
+            document.getElementById("userUnit").value = user.unit;
+            document.getElementById("newUsername").value = user.username;
+            document.getElementById("newPassword").value = "";
+            userFormTitle.textContent = "Edit User";
+            cancelUserEditBtn.classList.remove("hidden");
+          }
+
+          const deleteBtn = e.target.closest(".delete-user-btn");
+          if (deleteBtn) {
+            if (confirm("Apakah Anda yakin ingin menghapus user ini?")) {
+              users = users.filter((u) => u.id != deleteBtn.dataset.id);
+              renderUserTable();
+            }
+          }
+        });
+
+        const populateUserFormDropdown = () => {
+          const dropdown = document.getElementById("userUnit");
+          dropdown.innerHTML = "";
+          allUnits.forEach((unit) => {
+            const option = document.createElement("option");
+            option.value = unit;
+            option.textContent = unit;
+            dropdown.appendChild(option);
+          });
+        };
+
+        const populateUnitDropdowns = () => {
+          [unitPJDropdown].forEach((dropdown) => {
+            dropdown.innerHTML = "";
+            allUnits.forEach((unit) => {
+              const option = document.createElement("option");
+              option.value = unit;
+              option.textContent = unit;
+              dropdown.appendChild(option);
+            });
+          });
+        };
+
+        const populateYearFilter = () => {
+          yearFilter.innerHTML = '<option value="all">Semua Tahun</option>';
+          const years = [...new Set(recommendations.map((r) => r.tahun))].sort(
+            (a, b) => b - a
+          ); // descending
+          years.forEach((year) => {
+            const option = document.createElement("option");
+            option.value = year;
+            option.textContent = year;
+            yearFilter.appendChild(option);
+          });
+        };
+
+        // --- History / Audit Log ---
+        const addHistory = (user, action, details, unitInvolved) => {
+          const newLog = {
+            timestamp: new Date(),
+            user,
+            action,
+            details,
+            unit: unitInvolved,
+          };
+          historyLog.unshift(newLog); // Add to the beginning of the array
+          if (historyView.style.display !== "none") {
+            renderHistoryTable();
+          }
+        };
+
+        const renderHistoryTable = () => {
+          historyTableBody.innerHTML = "";
+
+          let logsToRender = historyLog;
+          if (currentUser.role === "unit_kerja") {
+            logsToRender = historyLog.filter(
+              (log) => log.unit === currentUser.unit
+            );
+          }
+
+          const totalPages = Math.ceil(logsToRender.length / rowsPerPage);
+          currentHistoryPage = Math.min(currentHistoryPage, totalPages || 1);
+          const start = (currentHistoryPage - 1) * rowsPerPage;
+          const end = start + rowsPerPage;
+          const paginatedItems = logsToRender.slice(start, end);
+
+          if (paginatedItems.length === 0) {
+            noHistoryResults.style.display = "block";
+            historyTableBody.style.display = "none";
+          } else {
+            noHistoryResults.style.display = "none";
+            historyTableBody.style.display = "";
+            paginatedItems.forEach((log) => {
+              const row = document.createElement("tr");
+              row.innerHTML = `
+                    <td class="py-3 px-4 text-sm">${log.timestamp.toLocaleString(
+                      "id-ID"
+                    )}</td>
+                    <td class="py-3 px-4 text-sm font-semibold">${log.user}</td>
+                    <td class="py-3 px-4 text-sm">${log.action}</td>
+                    <td class="py-3 px-4 text-sm text-gray-600">${
+                      log.details
+                    }</td>
+                `;
+              historyTableBody.appendChild(row);
+            });
+          }
+
+          if (logsToRender.length > 0) {
+            historyPaginationInfo.textContent = `Menampilkan ${
+              start + 1
+            }-${Math.min(end, logsToRender.length)} dari ${
+              logsToRender.length
+            } data`;
+          } else {
+            historyPaginationInfo.textContent = "Tidak ada data";
+          }
+          prevHistoryPage.disabled = currentHistoryPage === 1;
+          nextHistoryPage.disabled =
+            currentHistoryPage === totalPages || totalPages === 0;
+        };
+
+        // --- Chart Functions ---
+        const renderDashboard = () => {
+          let dataForCharts =
+            currentUser.role === "pemantau"
+              ? recommendations
+              : recommendations.filter((r) => r.unit === currentUser.unit);
+
+          doughnutChartConfig.forEach((config) => {
+            const sourceData = dataForCharts.filter(
+              (rec) => rec.sumber === config.source
+            );
+            const statusCounts = sourceData.reduce((acc, rec) => {
+              acc[rec.status] = (acc[rec.status] || 0) + 1;
+              return acc;
+            }, {});
+
+            const chartData = {
+              labels:
+                Object.keys(statusCounts).length > 0
+                  ? Object.keys(statusCounts)
+                  : ["Data Kosong"],
+              datasets: [
+                {
+                  data:
+                    Object.keys(statusCounts).length > 0
+                      ? Object.values(statusCounts)
+                      : [1],
+                  backgroundColor:
+                    Object.keys(statusCounts).length > 0
+                      ? Object.keys(statusCounts).map(
+                          (status) => statusColors[status]
+                        )
+                      : ["#E5E7EB"],
+                  borderColor: "#fff",
+                  borderWidth: 2,
+                },
+              ],
+            };
+
+            if (doughnutChartInstances[config.id])
+              doughnutChartInstances[config.id].destroy();
+            const ctx = document.getElementById(config.id).getContext("2d");
+            doughnutChartInstances[config.id] = new Chart(ctx, {
+              type: "doughnut",
+              data: chartData,
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: Object.keys(statusCounts).length > 0,
+                    position: "bottom",
+                    labels: { boxWidth: 12, font: { size: 10 } },
+                  },
+                },
+                onClick: (event, elements) => {
+                  if (elements.length > 0) {
+                    const chart = elements[0].element.$context.chart;
+                    const index = elements[0].index;
+                    const status = chart.data.labels[index];
+                    const source = config.source;
+                    if (status !== "Data Kosong")
+                      showRecapModal({ sumber: source, status: status });
+                  }
+                },
+              },
+            });
+          });
+
+          // Bar Chart Logic
+          const selectedYear = yearFilter.value;
+          let barChartData =
+            currentUser.role === "pemantau"
+              ? recommendations
+              : recommendations.filter((r) => r.unit === currentUser.unit);
+
+          if (selectedYear !== "all") {
+            barChartData = barChartData.filter(
+              (rec) => rec.tahun == selectedYear
+            );
+          }
+
+          const units = [
+            ...new Set(barChartData.map((rec) => rec.unit)),
+          ].sort();
+
+          const unitData = {
+            labels: units,
+            datasets: Object.keys(statusColors).map((status) => ({
+              label: status,
+              data: units.map(
+                (unit) =>
+                  barChartData.filter(
+                    (rec) => rec.unit === unit && rec.status === status
+                  ).length
+              ),
+              backgroundColor: statusColors[status],
+            })),
+          };
+
+          if (unitChartInstance) unitChartInstance.destroy();
+          const unitCtx = document.getElementById("unitChart").getContext("2d");
+          unitChartInstance = new Chart(unitCtx, {
+            type: "bar",
+            data: unitData,
+            options: {
+              indexAxis: "y",
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } },
+                y: { stacked: true },
+              },
+              onClick: (event, elements) => {
+                if (elements.length > 0) {
+                  const chart = elements[0].element.$context.chart;
+                  const index = elements[0].index;
+                  const datasetIndex = elements[0].datasetIndex;
+                  const unit = chart.data.labels[index];
+                  const status = chart.data.datasets[datasetIndex].label;
+                  const year = yearFilter.value;
+                  if (unit && status)
+                    showRecapModal({ unit: unit, status: status, tahun: year });
+                }
+              },
+            },
+          });
+        };
+
+        // --- Recap Modal & Export ---
+        const showRecapModal = (filters) => {
+          let dataForRecap = recommendations.filter((r) => {
+            let match = true;
+            for (const key in filters) {
+              if (key === "tahun" && filters[key] === "all") continue;
+              if (r[key] != filters[key]) {
+                match = false;
+                break;
+              }
+            }
+            return match;
+          });
+
+          dataForExport = dataForRecap;
+
+          let titleParts = ["Rekapan"];
+          if (filters.status) titleParts.push(filters.status);
+          if (filters.sumber) titleParts.push(filters.sumber);
+          if (filters.unit) titleParts.push(filters.unit);
+          if (filters.tahun && filters.tahun !== "all")
+            titleParts.push(`Tahun ${filters.tahun}`);
+          recapModalTitle.textContent = titleParts.join(": ");
+
+          if (dataForRecap.length === 0) {
+            recapTableContainer.innerHTML = `<p class="text-center text-gray-500">Tidak ada data untuk ditampilkan.</p>`;
+          } else {
+            recapTableContainer.innerHTML = `<table class="min-w-full bg-white text-sm">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="py-2 px-3 text-left">No LHP</th><th class="py-2 px-3 text-left">Sumber</th><th class="py-2 px-3 text-left">Tahun</th><th class="py-2 px-3 text-left">Nama Rekomendasi</th><th class="py-2 px-3 text-left">Unit PJ</th><th class="py-2 px-3 text-left">Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">${dataForRecap
+                  .map(
+                    (rec) => `
+                    <tr>
+                        <td class="py-2 px-3">${
+                          rec.noLHP
+                        }</td><td class="py-2 px-3">${
+                      rec.sumber
+                    }</td><td class="py-2 px-3">${
+                      rec.tahun
+                    }</td><td class="py-2 px-3">${
+                      rec.deskripsi
+                    }</td><td class="py-2 px-3">${
+                      rec.unit
+                    }</td><td class="py-2 px-3">${rec.keterangan || "-"}</td>
+                    </tr>`
+                  )
+                  .join("")}
+                </tbody></table>`;
+          }
+          recapModal.style.display = "flex";
+        };
+
+        const exportToExcel = () => {
+          if (dataForExport.length === 0) {
+            alert("Tidak ada data untuk diekspor.");
+            return;
+          }
+          const dataForSheet = dataForExport.map((rec) => ({
+            "Sumber Audit": rec.sumber,
+            "No. LHP": rec.noLHP,
+            "Nama LHP": rec.namaLHP,
+            Tahun: rec.tahun,
+            Temuan: rec.temuan,
+            Kondisi: rec.kondisi,
+            "No. Rekomendasi": rec.no,
+            "Nama Rekomendasi": rec.deskripsi,
+            "Unit Penanggung Jawab": rec.unit,
+            "Nama Unit Kerja": rec.namaUnitKerja,
+            Status: rec.status,
+            "Keterangan Tindak Lanjut": rec.keterangan,
+            "Catatan PTL sebelumnya": rec.catatanPemantau,
+            Dokumen: rec.dokumen.map((d) => d.value).join(", "),
+          }));
+          const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(
+            workbook,
+            worksheet,
+            "Rekapan Tindak Lanjut"
+          );
+          XLSX.writeFile(
+            workbook,
+            `Rekapan_${recapModalTitle.textContent.replace(
+              "Rekapan: ",
+              ""
+            )}.xlsx`
+          );
+        };
+
+        // --- VIEW TOGGLING (Updated) ---
+        const toggleView = (view) => {
+          [
+            dashboardView,
+            tableView,
+            historyView,
+            userManagementView,
+            profileView,
+          ].forEach((v) => v.classList.add("hidden"));
+
+          if (view === "dashboard") {
+            dashboardView.classList.remove("hidden");
+            mainTitle.textContent = "Dashboard Monitoring";
+            mainSubtitle.textContent = "";
+          } else if (view === "table") {
+            tableView.classList.remove("hidden");
+            const sourceName = unitFilter;
+            mainTitle.textContent = "Daftar Rekomendasi dan Tindak Lanjut";
+            mainSubtitle.textContent = `Menampilkan data untuk: ${
+              sourceName === "all" ? "Semua Unit" : sourceName
+            }`;
+          } else if (view === "history") {
+            historyView.classList.remove("hidden");
+            mainTitle.textContent = "History";
+            mainSubtitle.textContent = "Log aktivitas dan perubahan data";
+            renderHistoryTable();
+          } else if (view === "user-management") {
+            userManagementView.classList.remove("hidden");
+            mainTitle.textContent = "Manajemen User";
+            mainSubtitle.textContent = "Kelola akun untuk Unit Kerja";
+          } else if (view === "profile") {
+            profileView.classList.remove("hidden");
+            mainTitle.textContent = "Profil Akun";
+            mainSubtitle.textContent = "Ubah username dan password Anda";
+            showProfileView();
+          }
+        };
+
+        // --- Profile View Logic ---
+        const showProfileView = () => {
+          profileMessage.classList.add("hidden");
+          profileForm.reset();
+          document.getElementById("profileUsername").value =
+            currentUser.username;
+        };
+
+        profileForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+
+          const currentPassword =
+            document.getElementById("currentPassword").value;
+          const newUsername = document.getElementById("profileUsername").value;
+          const newPassword =
+            document.getElementById("newProfilePassword").value;
+          const confirmPassword =
+            document.getElementById("confirmNewPassword").value;
+
+          // Verify current password
+          if (currentPassword !== currentUser.password) {
+            profileMessage.textContent = "Password lama tidak cocok.";
+            profileMessage.className =
+              "p-3 rounded-md mb-4 text-sm bg-red-100 text-red-700";
+            profileMessage.classList.remove("hidden");
+            return;
+          }
+
+          // Check if new username is taken by another user
+          if (
+            newUsername !== currentUser.username &&
+            users.some((u) => u.username === newUsername)
+          ) {
+            profileMessage.textContent =
+              "Username baru sudah digunakan. Pilih username lain.";
+            profileMessage.className =
+              "p-3 rounded-md mb-4 text-sm bg-red-100 text-red-700";
+            profileMessage.classList.remove("hidden");
+            return;
+          }
+
+          // If new password is provided, it must match the confirmation
+          if (newPassword && newPassword !== confirmPassword) {
+            profileMessage.textContent =
+              "Konfirmasi password baru tidak cocok.";
+            profileMessage.className =
+              "p-3 rounded-md mb-4 text-sm bg-red-100 text-red-700";
+            profileMessage.classList.remove("hidden");
+            return;
+          }
+
+          // Update user data
+          currentUser.username = newUsername;
+          if (newPassword) {
+            currentUser.password = newPassword;
+          }
+
+          profileMessage.textContent =
+            "Profil berhasil diperbarui. Anda akan dikeluarkan dari sistem untuk login kembali.";
+          profileMessage.className =
+            "p-3 rounded-md mb-4 text-sm bg-green-100 text-green-700";
+          profileMessage.classList.remove("hidden");
+
+          addHistory(
+            currentUser.unit,
+            "Update Profil",
+            "Username/password telah diubah.",
+            currentUser.unit
+          );
+
+          setTimeout(() => {
+            logoutBtn.click();
+          }, 3000);
+        });
+
+        // --- Table & General Functions ---
+        const getStatusBadge = (status) => {
+          const colors = {
+            Selesai: "bg-green-100 text-green-800",
+            "Dalam Proses": "bg-yellow-100 text-yellow-800",
+            "Belum Ditindaklanjuti": "bg-red-100 text-red-800",
+          };
+          return `<span class="${
+            colors[status] || "bg-gray-100 text-gray-800"
+          } text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">${status}</span>`;
+        };
+
+        const renderTable = () => {
+          tableBody.innerHTML = "";
+          const dataToRender = recommendations;
+
+          filteredData = dataToRender.filter((rec) => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const statusFilterVal = filterStatus.value;
+            const matchesSearch = Object.values(rec).some((val) =>
+              String(val).toLowerCase().includes(searchTerm)
+            );
+            const matchesStatus =
+              statusFilterVal === "all" || rec.status === statusFilterVal;
+            const matchesUnit = unitFilter === "all" || rec.unit === unitFilter;
+            return matchesSearch && matchesStatus && matchesUnit;
+          });
+
+          const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+          currentPage = Math.min(currentPage, totalPages || 1);
+          const start = (currentPage - 1) * rowsPerPage;
+          const end = start + rowsPerPage;
+          const paginatedItems = filteredData.slice(start, end);
+
+          if (paginatedItems.length === 0) {
+            noResults.style.display = "block";
+            tableBody.style.display = "none";
+          } else {
+            noResults.style.display = "none";
+            tableBody.style.display = "";
+            paginatedItems.forEach((rec, index) => {
+              const row = document.createElement("tr");
+              row.className = "hover:bg-gray-50 transition-colors";
+              let docLinks =
+                rec.dokumen && rec.dokumen.length > 0
+                  ? rec.dokumen
+                      .map((doc) =>
+                        doc.type === "file"
+                          ? `<div class="truncate"><i class="fas fa-file-alt text-gray-500 mr-1"></i><a href="#" class="text-blue-600 hover:underline" title="${doc.value}">${doc.value}</a></div>`
+                          : `<div class="truncate"><i class="fas fa-link text-gray-500 mr-1"></i><a href="${doc.value}" target="_blank" class="text-blue-600 hover:underline" title="${doc.value}">${doc.value}</a></div>`
+                      )
+                      .join("")
+                  : "Belum ada";
+
+              const isOwner = rec.unit === currentUser.unit;
+              const canEdit =
+                currentUser.role === "pemantau" ||
+                (currentUser.role === "unit_kerja" && isOwner);
+              const editButtonHTML = canEdit
+                ? `<button class="text-blue-600 hover:text-blue-800 mr-2 edit-btn" data-id="${rec.id}" title="Edit/Update Tindak Lanjut"><i class="fas fa-pencil-alt"></i></button>`
+                : `<button class="text-gray-400 cursor-not-allowed mr-2" disabled title="Anda hanya bisa mengedit data unit Anda"><i class="fas fa-pencil-alt"></i></button>`;
+              const deleteButtonHTML =
+                currentUser.role === "pemantau"
+                  ? `<button class="text-red-600 hover:text-red-800 delete-btn" data-id="${rec.id}" title="Hapus"><i class="fas fa-trash-alt"></i></button>`
+                  : "";
+              const catatanHTML =
+                rec.status === "Dalam Proses" && rec.catatanPemantau
+                  ? rec.catatanPemantau
+                  : "-";
+
+              row.innerHTML = `
+                    <td class="py-3 px-4 text-sm">${start + index + 1}</td>
+                    <td class="py-3 px-4 text-sm"><div class="font-semibold">${
+                      rec.sumber
+                    }</div><div class="text-xs text-gray-500">${
+                rec.noLHP
+              }</div><div class="text-xs text-gray-500 font-medium truncate" title="${
+                rec.namaLHP
+              }">${rec.namaLHP}</div></td>
+                    <td class="py-3 px-4 text-sm">${rec.tahun}</td>
+                    <td class="py-3 px-4 text-sm max-w-xs truncate" title="${
+                      rec.temuan
+                    }">${rec.temuan}</td>
+                    <td class="py-3 px-4 text-sm max-w-xs truncate" title="${
+                      rec.kondisi
+                    }">${rec.kondisi}</td>
+                    <td class="py-3 px-4 text-sm">${rec.no}</td>
+                    <td class="py-3 px-4 text-sm max-w-xs truncate" title="${
+                      rec.deskripsi
+                    }">${rec.deskripsi}</td>
+                    <td class="py-3 px-4 text-sm max-w-xs"><div class="font-semibold truncate" title="${
+                      rec.unit
+                    }">${
+                rec.unit
+              }</div><div class="text-xs text-gray-600 truncate" title="${
+                rec.namaUnitKerja
+              }">${rec.namaUnitKerja || ""}</div></td>
+                    <td class="py-3 px-4 text-sm">${docLinks}</td>
+                    <td class="py-3 px-4 text-center">${getStatusBadge(
+                      rec.status
+                    )}</td>
+                    <td class="py-3 px-4 text-sm text-gray-600 italic max-w-xs truncate" title="${catatanHTML}">${catatanHTML}</td>
+                    <td class="py-3 px-4 text-center">${editButtonHTML}${deleteButtonHTML}</td>`;
+              tableBody.appendChild(row);
+            });
+          }
+          updatePagination(totalPages, start, end);
+        };
+
+        const updatePagination = (totalPages, start, end) => {
+          paginationInfo.textContent =
+            filteredData.length > 0
+              ? `Menampilkan ${start + 1}-${Math.min(
+                  end,
+                  filteredData.length
+                )} dari ${filteredData.length} data`
+              : "Tidak ada data";
+          prevPage.disabled = currentPage === 1;
+          nextPage.disabled = currentPage === totalPages || totalPages === 0;
+        };
+
+        const openModal = (recommendation = null) => {
+          form.reset();
+          document.getElementById("dokumen-sebelumnya").innerHTML = "";
+          const isPemantau = currentUser.role === "pemantau";
+          const isNew = recommendation === null;
+          const statusDropdown = document.getElementById("status");
+          const catatanPemantauContainer = document.getElementById(
+            "catatanPemantauContainer"
+          );
+          const toggleCatatanPemantauField = () => {
+            if (statusDropdown.value === "Dalam Proses" && isPemantau) {
+              catatanPemantauContainer.classList.remove("hidden");
+            } else {
+              catatanPemantauContainer.classList.add("hidden");
+            }
+          };
+          statusDropdown.onchange = toggleCatatanPemantauField;
+          modalTitle.textContent = isNew
+            ? "Tambah Data Baru"
+            : isPemantau
+            ? "Edit Data"
+            : "Update Tindak Lanjut";
+          if (recommendation) {
+            document.getElementById("recommendationId").value =
+              recommendation.id;
+            document.getElementById("sumberAudit").value =
+              recommendation.sumber;
+            document.getElementById("noLHP").value = recommendation.noLHP;
+            document.getElementById("namaLHP").value = recommendation.namaLHP;
+            document.getElementById("tahun").value = recommendation.tahun;
+            document.getElementById("temuan").value = recommendation.temuan;
+            document.getElementById("kondisi").value = recommendation.kondisi;
+            document.getElementById("noRekomendasi").value = recommendation.no;
+            document.getElementById("deskripsi").value =
+              recommendation.deskripsi;
+            document.getElementById("unitPJ").value = recommendation.unit;
+            document.getElementById("namaUnitKerja").value =
+              recommendation.namaUnitKerja;
+            document.getElementById("status").value = recommendation.status;
+            document.getElementById("catatanPemantau").value =
+              recommendation.catatanPemantau || "";
+            document.getElementById("keterangan").value =
+              recommendation.keterangan || "";
+
+            const linkTextarea = document.getElementById("linkDokumen");
+            linkTextarea.value = "";
+            if (recommendation.dokumen) {
+              document.getElementById("dokumen-sebelumnya").innerHTML =
+                recommendation.dokumen.filter((d) => d.type === "file").length >
+                0
+                  ? '<strong class="mb-1 block">File sebelumnya:</strong><ul class="list-disc list-inside">' +
+                    recommendation.dokumen
+                      .filter((d) => d.type === "file")
+                      .map((f) => `<li>${f.value}</li>`)
+                      .join("") +
+                    "</ul>"
+                  : "";
+              linkTextarea.value = recommendation.dokumen
+                .filter((d) => d.type === "link")
+                .map((l) => l.value)
+                .join("\n");
+            }
+          } else {
+            document.getElementById("recommendationId").value = "";
+          }
+          toggleCatatanPemantauField();
+          const pemantauFields = [
+            "sumberAudit",
+            "noLHP",
+            "namaLHP",
+            "tahun",
+            "temuan",
+            "kondisi",
+            "noRekomendasi",
+            "deskripsi",
+            "unitPJ",
+            "namaUnitKerja",
+            "status",
+            "catatanPemantau",
+          ];
+          const allFields = [
+            ...pemantauFields,
+            "keterangan",
+            "dokumen",
+            "linkDokumen",
+          ];
+          allFields.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.disabled = !isPemantau && pemantauFields.includes(id);
+              el.classList.toggle("disabled-input", el.disabled);
+            }
+          });
+          if (!isPemantau) catatanPemantauContainer.classList.add("hidden");
+          modal.style.display = "flex";
+        };
+
+        const closeModal = () => (modal.style.display = "none");
+
+        const handleFormSubmit = (e) => {
+          e.preventDefault();
+          const id = document.getElementById("recommendationId").value;
+          const newLinks = document
+            .getElementById("linkDokumen")
+            .value.split("\n")
+            .map((l) => l.trim())
+            .filter((l) => l)
+            .map((link) => ({ type: "link", value: link }));
+          const newFiles = Array.from(
+            document.getElementById("dokumen").files
+          ).map((file) => ({ type: "file", value: file.name }));
+
+          if (id) {
+            const index = recommendations.findIndex((rec) => rec.id == id);
+            const rec = recommendations[index];
+            const userForHistory =
+              currentUser.role === "pemantau"
+                ? currentUser.unit
+                : currentUser.unit;
+            rec.dokumen = [
+              ...(newFiles.length > 0
+                ? newFiles
+                : rec.dokumen.filter((d) => d.type === "file")),
+              ...newLinks,
+            ];
+            rec.keterangan = document.getElementById("keterangan").value;
+            if (currentUser.role === "pemantau") {
+              Object.assign(rec, {
+                sumber: document.getElementById("sumberAudit").value,
+                noLHP: document.getElementById("noLHP").value,
+                namaLHP: document.getElementById("namaLHP").value,
+                tahun: parseInt(document.getElementById("tahun").value),
+                temuan: document.getElementById("temuan").value,
+                kondisi: document.getElementById("kondisi").value,
+                no: document.getElementById("noRekomendasi").value,
+                deskripsi: document.getElementById("deskripsi").value,
+                unit: document.getElementById("unitPJ").value,
+                namaUnitKerja: document.getElementById("namaUnitKerja").value,
+                status: document.getElementById("status").value,
+                catatanPemantau:
+                  document.getElementById("status").value === "Dalam Proses"
+                    ? document.getElementById("catatanPemantau").value
+                    : "",
+              });
+            }
+            addHistory(
+              userForHistory,
+              "Update Data",
+              `ID Rekomendasi: ${id}`,
+              rec.unit
+            );
+          } else {
+            const newStatus = document.getElementById("status").value;
+            const newRec = {
+              id:
+                recommendations.length > 0
+                  ? Math.max(...recommendations.map((r) => r.id)) + 1
+                  : 1,
+              sumber: document.getElementById("sumberAudit").value,
+              noLHP: document.getElementById("noLHP").value,
+              namaLHP: document.getElementById("namaLHP").value,
+              tahun: parseInt(document.getElementById("tahun").value),
+              temuan: document.getElementById("temuan").value,
+              kondisi: document.getElementById("kondisi").value,
+              no: document.getElementById("noRekomendasi").value,
+              deskripsi: document.getElementById("deskripsi").value,
+              unit: document.getElementById("unitPJ").value,
+              namaUnitKerja: document.getElementById("namaUnitKerja").value,
+              status: newStatus,
+              catatanPemantau:
+                newStatus === "Dalam Proses"
+                  ? document.getElementById("catatanPemantau").value
+                  : "",
+              keterangan: document.getElementById("keterangan").value,
+              dokumen: [...newFiles, ...newLinks],
+            };
+            recommendations.push(newRec);
+            addHistory(
+              currentUser.unit,
+              "Tambah Data",
+              `ID Rekomendasi Baru: ${newRec.id}`,
+              newRec.unit
+            );
+          }
+          renderTable();
+          renderDashboard();
+          closeModal();
+        };
+
+        const updateActiveLink = (clickedElement) => {
+          document
+            .querySelectorAll(".nav-link, .nav-link-sub")
+            .forEach((link) => link.classList.remove("active-link"));
+          clickedElement.classList.add("active-link");
+          if (clickedElement.classList.contains("nav-link-sub")) {
+            navTindakLanjutToggle.classList.add("active-link");
+          } else if (!navSubmenu.classList.contains("hidden")) {
+            navSubmenu.classList.add("hidden");
+            navTindakLanjutToggle.classList.remove("open");
+          }
+        };
+
+        const handleSubmenuClick = (e) => {
+          e.preventDefault();
+          const sourceName = e.target.dataset.source;
+          if (currentUser.role === "unit_kerja" && sourceName === "all") {
+            return; // Unit Kerja cannot see "Semua Unit"
+          }
+          unitFilter = sourceName;
+          currentPage = 1;
+          toggleView("table");
+          renderTable();
+          updateActiveLink(e.currentTarget);
+        };
+
+        // --- Event Listeners ---
+        addBtn.addEventListener("click", () => openModal());
+        cancelBtn.addEventListener("click", closeModal);
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) closeModal();
+        });
+        form.addEventListener("submit", handleFormSubmit);
+
+        yearFilter.addEventListener("change", renderDashboard);
+
+        closeRecapModalBtn.addEventListener("click", () => {
+          recapModal.style.display = "none";
+        });
+        recapModal.addEventListener("click", (e) => {
+          if (e.target === recapModal) recapModal.style.display = "none";
+        });
+        exportExcelBtn.addEventListener("click", exportToExcel);
+
+        searchInput.addEventListener("input", () => {
+          currentPage = 1;
+          renderTable();
+        });
+        filterStatus.addEventListener("change", () => {
+          currentPage = 1;
+          renderTable();
+        });
+
+        tableBody.addEventListener("click", (e) => {
+          const editBtn = e.target.closest(".edit-btn");
+          if (editBtn)
+            openModal(
+              recommendations.find((rec) => rec.id == editBtn.dataset.id)
+            );
+          const deleteBtn = e.target.closest(".delete-btn");
+          if (deleteBtn) {
+            const recId = deleteBtn.dataset.id;
+            const recToDelete = recommendations.find((rec) => rec.id == recId);
+            if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+              recommendations = recommendations.filter(
+                (rec) => rec.id != recId
+              );
+              addHistory(
+                currentUser.unit,
+                "Hapus Data",
+                `ID Rekomendasi: ${recId}`,
+                recToDelete.unit
+              );
+              renderTable();
+              renderDashboard();
+            }
+          }
+        });
+
+        prevPage.addEventListener("click", () => {
+          if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+          }
+        });
+        nextPage.addEventListener("click", () => {
+          const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+          if (currentPage < totalPages) {
+            currentPage++;
+            renderTable();
+          }
+        });
+        prevHistoryPage.addEventListener("click", () => {
+          if (currentHistoryPage > 1) {
+            currentHistoryPage--;
+            renderHistoryTable();
+          }
+        });
+        nextHistoryPage.addEventListener("click", () => {
+          const totalPages = Math.ceil(historyLog.length / rowsPerPage);
+          if (currentHistoryPage < totalPages) {
+            currentHistoryPage++;
+            renderHistoryTable();
+          }
+        });
+
+        // Sidebar navigation listeners
+        sidebarToggle.addEventListener("click", () =>
+          sidebar.classList.toggle("hidden")
+        );
+        navDashboard.addEventListener("click", (e) => {
+          e.preventDefault();
+          toggleView("dashboard");
+          updateActiveLink(e.currentTarget);
+        });
+        navHistory.addEventListener("click", (e) => {
+          e.preventDefault();
+          toggleView("history");
+          updateActiveLink(e.currentTarget);
+        });
+        navUserManagement.addEventListener("click", (e) => {
+          e.preventDefault();
+          toggleView("user-management");
+          updateActiveLink(e.currentTarget);
+          renderUserTable();
+        });
+        navProfile.addEventListener("click", (e) => {
+          e.preventDefault();
+          toggleView("profile");
+          updateActiveLink(e.currentTarget);
+        });
+        navTindakLanjutToggle.addEventListener("click", () => {
+          navSubmenu.classList.toggle("hidden");
+          navTindakLanjutToggle.classList.toggle("open");
+        });
+
+        // --- Initial Render ---
+        populateUserFormDropdown();
+        populateUnitDropdowns();
+      });
+    </script>
+  </body>
+</html>
